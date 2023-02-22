@@ -201,6 +201,11 @@ void AMyDynamicPawn::AdvanceTimer()
     --CountdownTime;
     UpdateTimerDisplay();
 
+	// this is the only way I could get zoom to change at the same time as "GO!"
+	if (CountdownTime == 0) {
+		bZooming = !bZooming;
+	}
+
 	if (CountdownTime < 1) {
 		CountdownHasFinished();
 	}
@@ -208,9 +213,8 @@ void AMyDynamicPawn::AdvanceTimer()
     {
         //We're done counting down, so stop running the timer.
         GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
-        
-		//reverse zoom
-		bZooming = !bZooming;
+
+		
 
 		CountdownText->SetVisibility(false);
     }
@@ -236,6 +240,7 @@ void AMyDynamicPawn::OnMouseOver(AActor* touchedActor)
 // called when mouse click
 void AMyDynamicPawn::OnMouseClick(AActor* clickedActor, FKey click)
 {
+	CountdownTime = CountdownTimer;
 	if(GEngine) {
 		GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Orange, FString::Printf(TEXT("Mouse clicked!! Timer reset to:%i"), CountdownTime));
 	}
