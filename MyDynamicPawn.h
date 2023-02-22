@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Camera/CameraComponent.h"
+#include "Components/TextRenderComponent.h"
 #include "MyDynamicPawn.generated.h"
 
 
@@ -58,11 +59,35 @@ public:
 	// move y axis
 	void Move_YAxis(float AxisValue);
 
+	// changes zoomRate
+	void changeZoom(float AxisValue);
+	float cZoom = 0;
+
 	// vector to update camera relative position
 	FVector CurrentVelocity;
 
 	//Set up Countdown Timer
-	int CountdownTime;
+	UPROPERTY(EditAnywhere)
+	int32 CountdownTime = 3;
+
+	// updates the text in CountdownText
 	void UpdateTimerDisplay();	
-	//UTextRenderComponent* CountdownText;
+	UTextRenderComponent* CountdownText;
+
+	// calls to keep track of time
+	void AdvanceTimer();
+
+	// changes CountdownText when timer has finished
+	void CountdownHasFinished();
+
+
+	FTimerHandle CountdownTimerHandle;
+
+	// callback function when mouse is over actor
+	UFUNCTION()
+	void OnMouseOver(AActor* touchedActor);
+
+	// callback function for mouse click on object
+	UFUNCTION()
+	void OnMouseClick(AActor* clickedActor, FKey click);
 };
