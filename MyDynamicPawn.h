@@ -68,7 +68,9 @@ public:
 
 	//Set up Countdown Timer
 	UPROPERTY(EditAnywhere)
-	int32 CountdownTime = 3;
+	int32 CountdownTimer = 3;
+
+	int32 CountdownTime = CountdownTimer;
 
 	// updates the text in CountdownText
 	void UpdateTimerDisplay();	
