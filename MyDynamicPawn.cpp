@@ -19,9 +19,6 @@ AMyDynamicPawn::AMyDynamicPawn()
 
 	OurVisibleComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 
-	// Create text for CountdownText
-	//CountdownText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("CountdownNumber"));
-
 	// Attach our visible object to our root component
 
 	OurVisibleComponent->SetupAttachment(RootComponent);
@@ -35,16 +32,43 @@ AMyDynamicPawn::AMyDynamicPawn()
 	OurCamera->SetRelativeRotation(FRotator(-35.0f, 0.0f, 0.0f));
 
 	// Initialize the CountDownText
- /* CountdownText->SetHorizontalAlignment(EHTA_Center);
+	CountdownText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("CountdownNumber"));
+    CountdownText->SetHorizontalAlignment(EHTA_Center);
     CountdownText->SetWorldSize(150.0f);
 	CountdownText->SetupAttachment(RootComponent);  
-	CountdownTime = 3; */
+	CountdownTime = 3;
+	CountdownText->SetVisibility(false);
 
+	// Listens to mouse hovering
+	OnBeginCursorOver.AddDynamic(this, &AMyDynamicPawn::OnMouseOver);
+
+	// Listens to mouse click
+	OnClicked.AddDynamic(this, &AMyDynamicPawn::OnMouseClick);
 }
 
 // Called when the game starts or when spawned
 void AMyDynamicPawn::BeginPlay()
 {
+/* 	// Starts Timer, updates the display and location
+	UpdateTimerDisplay();
+	GetWorldTimerManager().SetTimer(CountdownTimerHandle, this, &AMyDynamicPawn::AdvanceTimer, 1.0f, true);
+	CountdownText->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f)); //Values are just an example
+	CountdownText->SetRelativeRotation(FRotator(0, -180, 0)); //Values are just an example
+ */
+
+
+	CountdownText->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f)); //Values are just an example
+	CountdownText->SetRelativeRotation(FRotator(0, -180, 0)); //Values are just an example
+	// Make cursor visible on screen
+	if(GetWorld()) {
+		APlayerController *myPlayerController = GetWorld()->GetFirstPlayerController();
+
+		if(myPlayerController != NULL) {
+			myPlayerController->bShowMouseCursor=true;
+			myPlayerController->bEnableMouseOverEvents=true;
+			myPlayerController->bEnableClickEvents=true;
+		}
+	}
 	Super::BeginPlay();
 	
 }
@@ -65,11 +89,12 @@ void AMyDynamicPawn::Tick(float DeltaTime)
     	// Shrink half as fast as we grow
         CurrentScale -= (DeltaTime * 0.5f);
     }
+
     // Make sure we never drop below our starting size, or increase past triple size.
     CurrentScale = FMath::Clamp(CurrentScale, 1.0f, 3.0f);
+
     // Update the scale
     OurVisibleComponent->SetWorldScale3D(FVector(CurrentScale));
-
 
 	//Get relative location of camera in cameraLoc, static mesh relative location in objectLoc
 	FTransform camRelTransform = OurCamera->GetRelativeTransform();
@@ -82,12 +107,21 @@ void AMyDynamicPawn::Tick(float DeltaTime)
 	
 	//get distance from camera to static mesh
 	float distance = (objectLoc- cameraLoc).Size();
+
+	//change zoomRate over time
+	zoomRate = FMath::Clamp(zoomRate + cZoom*DeltaTime, 0, 300);
+
+	//if zoomRate = 0, display debug message
+	if (zoomRate == 0 && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(3, 1.f, FColor::Magenta, FString::Printf(TEXT("Caution: Zoom Rate is 0. Unable to Move!")));
+    }
 	
 	//clamp distance between 600 and 800,  bZooming ? zoom in : zoom out
 	if(bZooming && distance > 600) {
 		cameraLoc += direction*zoomRate*DeltaTime;
 	}
-	else if(!bZooming && distance < 800){
+	else if(!bZooming && distance < 900){
 		cameraLoc -= direction*zoomRate*DeltaTime;
 	}
 	OurCamera->SetRelativeLocation(cameraLoc);
@@ -100,9 +134,15 @@ void AMyDynamicPawn::Tick(float DeltaTime)
 
 	// Handle movement
 	if(!CurrentVelocity.IsZero()) {
-		FVector NewLocation = objectLoc - (CurrentVelocity * DeltaTime); //Note multiplication by DeltaTime
+		FVector NewLocation = objectLoc + (CurrentVelocity * DeltaTime); //Note multiplication by DeltaTime
 		OurVisibleComponent->SetRelativeLocation(NewLocation);
+
+		// Making the text move with the visible component
+		CountdownText->SetRelativeLocation(NewLocation + FVector(0.0f, 0.0f, 50.0f));
 	}
+
+	// Handle Camera rotataion
+	OurCamera->SetRelativeRotation((1*direction).Rotation());
 
 	Super::Tick(DeltaTime);
 
@@ -117,6 +157,7 @@ void AMyDynamicPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 	PlayerInputComponent->BindAction("Zoom", IE_Pressed, this, &AMyDynamicPawn::ToggleZooming);
 	PlayerInputComponent->BindAxis("MoveX", this, &AMyDynamicPawn::Move_XAxis);
 	PlayerInputComponent->BindAxis("MoveY", this, &AMyDynamicPawn::Move_YAxis);
+	PlayerInputComponent->BindAxis("changeZoom", this, &AMyDynamicPawn::changeZoom);
 }
 
 // Toggles bZooming, mapped to space bar in AMyDynamicPawn::SetupPlayerInputComponent()
@@ -125,7 +166,7 @@ void AMyDynamicPawn::ToggleZooming()
     bZooming = !bZooming;
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow, FString::Printf(TEXT("Reversing direction due to pressing spacebar!")));
+        GEngine->AddOnScreenDebugMessage(4, 2.f, FColor::Yellow, FString::Printf(TEXT("Reversing direction due to pressing spacebar!")));
     }
 }
 
@@ -143,8 +184,63 @@ void AMyDynamicPawn::Move_YAxis(float AxisValue)
 	CurrentVelocity.Y = FMath::Clamp(AxisValue, -1.0f, 1.0f) * 100.0f;
 }
 
-// updates the timer display
-/* void ADynamicPawn::UpdateTimerDisplay()
+// Clamps the Zoomrate between 0 and 300 cm/s
+void AMyDynamicPawn::changeZoom(float AxisValue) 
 {
-    CountdownText->SetText(FString::FromInt(FMath::Max(CountdownTime, 0)));
-} */
+	cZoom = FMath::Clamp(AxisValue, -1.0, 1.0f) * 100.0f;
+}
+
+// Called to update the text in CountdownText
+void AMyDynamicPawn::UpdateTimerDisplay() {
+	CountdownText->SetText(FText::FromString(FString::FromInt(FMath::Max(CountdownTime, 0))));
+}
+
+// Counts the time for CountdownText
+void AMyDynamicPawn::AdvanceTimer()
+{
+    --CountdownTime;
+    UpdateTimerDisplay();
+
+	if (CountdownTime < 1) {
+		CountdownHasFinished();
+	}
+    if (CountdownTime < 0)
+    {
+        //We're done counting down, so stop running the timer.
+        GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
+        
+		//reverse zoom
+		CountdownText->SetVisibility(false);
+
+		bZooming = !bZooming;
+    }
+}
+
+// Called when timer completes
+void AMyDynamicPawn::CountdownHasFinished()
+{
+    //Change to a special readout
+    CountdownText->SetText(FText::FromString("GO!"));
+}
+
+// Called when Mouse is over actor
+void AMyDynamicPawn::OnMouseOver(AActor* touchedActor)
+{
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(2, 1.f, FColor::Magenta, FString::Printf(TEXT("Mouse over!!")));
+    }
+}
+
+
+// called when mouse click
+void AMyDynamicPawn::OnMouseClick(AActor* clickedActor, FKey click)
+{
+	if(GEngine) {
+		GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Orange, FString::Printf(TEXT("Mouse clicked!! Timer reset to:%i"), CountdownTime));
+	}
+	// Starts Timer, updates the display and location
+	CountdownText->SetVisibility(true);
+	UpdateTimerDisplay();
+	GetWorldTimerManager().SetTimer(CountdownTimerHandle, this, &AMyDynamicPawn::AdvanceTimer, 1.0f, true);
+}
