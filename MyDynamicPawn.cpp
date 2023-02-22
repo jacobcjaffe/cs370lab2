@@ -210,9 +210,9 @@ void AMyDynamicPawn::AdvanceTimer()
         GetWorldTimerManager().ClearTimer(CountdownTimerHandle);
         
 		//reverse zoom
-		CountdownText->SetVisibility(false);
-
 		bZooming = !bZooming;
+
+		CountdownText->SetVisibility(false);
     }
 }
 
